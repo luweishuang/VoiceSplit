@@ -1,3 +1,8 @@
+datasets/LibriSpeech/audios_demo/2_speakers/images/
+encoder/saved_models
+models/demo5.pt
+models/pretrained.zip
+
 .idea/
 # configuration yaml files
 config/*
