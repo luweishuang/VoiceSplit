@@ -2,7 +2,7 @@ import os
 import torch
 import json
 import re
-import datetime
+import soundfile as sf
 import librosa
 
 import torch.nn as nn
@@ -50,6 +50,7 @@ def get_audios_with_random_amp(emb_audio, clean_audio, interference, noise_audio
 
     return emb_audio, clean_audio, interference, noise_audio
 
+
 def mix_wavfiles_without_voice_overlay(output_dir, sample_rate, audio_len, ap, form, num, embedding_utterance_path, interference_utterance_path, clean_utterance_path, noise_1_path, noise_2_path):
     data_out_dir = output_dir
     emb_audio, _ = librosa.load(embedding_utterance_path, sr=sample_rate)
@@ -58,8 +59,7 @@ def mix_wavfiles_without_voice_overlay(output_dir, sample_rate, audio_len, ap, f
     noise_1_audio, _ = librosa.load(noise_1_path, sr=sample_rate)
     noise_2_audio, _ = librosa.load(noise_2_path, sr=sample_rate)
 
-    assert len(emb_audio.shape) == len(clean_audio.shape) == len(interference.shape) == 1, \
-        'wav files must be mono, not stereo'
+    assert len(emb_audio.shape) == len(clean_audio.shape) == len(interference.shape) == 1, 'wav files must be mono, not stereo'
 
     # trim initial and end  wave file silence using librosa
     emb_audio, _ = librosa.effects.trim(emb_audio, top_db=20)
@@ -76,13 +76,11 @@ def mix_wavfiles_without_voice_overlay(output_dir, sample_rate, audio_len, ap, f
 
     if emb_audio.shape[0] < 1.1*window*hop_length:
         return
-
     two_clean = not getrandbits(1)
     
     # calculate frames using audio necessary for config.audio['audio_len'] seconds
     seconds = random.randint(2,4)
     audio_len_clean_max_value = int(sample_rate * seconds)
-
     seconds = random.randint(2,4)
     audio_len_interference_max_value = int(sample_rate * seconds)
 
@@ -116,9 +114,6 @@ def mix_wavfiles_without_voice_overlay(output_dir, sample_rate, audio_len, ap, f
     interference_random = interference_random[:audio_len_interference_max_value]
 
     # preparar ruido para as partes ( o mesmo ruido ) ( concatenar 2 ruidos diferentes)
-    
-    
-    
     if two_clean:
         clean_audio_parts = librosa.effects.split(clean_audio,top_db=20)
         # adicionar rudio em  interference, clean_audio,  interference_random, clean_audio_random         
@@ -296,14 +291,11 @@ def mix_wavfiles_without_voice_overlay(output_dir, sample_rate, audio_len, ap, f
     torch.save(torch.from_numpy(mixed_spec), mixed_spec_path)
 
 
-
-def mix_wavfiles(output_dir, sample_rate, audio_len, ap, form, num, embedding_utterance_path, interference_utterance_path, clean_utterance_path):
-    data_out_dir = output_dir
+def mix_wavfiles(data_out_dir, sample_rate, audio_len, ap, form, num, embedding_utterance_path, interference_utterance_path, clean_utterance_path):
     emb_audio, _ = librosa.load(embedding_utterance_path, sr=sample_rate)
     clean_audio, _ = librosa.load(clean_utterance_path, sr=sample_rate)
     interference, _ = librosa.load(interference_utterance_path, sr=sample_rate)
-    assert len(emb_audio.shape) == len(clean_audio.shape) == len(interference.shape) == 1, \
-        'wav files must be mono, not stereo'
+    assert len(emb_audio.shape) == len(clean_audio.shape) == len(interference.shape) == 1, 'wav files must be mono, not stereo'
 
     # trim initial and end  wave file silence using librosa
     emb_audio, _ = librosa.effects.trim(emb_audio, top_db=20)
@@ -331,23 +323,28 @@ def mix_wavfiles(output_dir, sample_rate, audio_len, ap, form, num, embedding_ut
     # save normalized wave files and wav emb ref
     target_wav_path = glob_re_to_filename(data_out_dir, form['target_wav'], num)
     mixed_wav_path = glob_re_to_filename(data_out_dir, form['mixed_wav'], num)
-    emb_wav_path = glob_re_to_filename(data_out_dir, form['emb_wav'], num)
-    librosa.output.write_wav(emb_wav_path, emb_audio, sample_rate)
-    librosa.output.write_wav(target_wav_path, clean_audio, sample_rate)
-    librosa.output.write_wav(mixed_wav_path, mixed_audio, sample_rate)
+    s1_dvec_wav_path = glob_re_to_filename(data_out_dir, form['emb_wav'], num)
+    s2_target_wav_path = glob_re_to_filename(data_out_dir, '*-target2.wav', num)
+    sf.write(s1_dvec_wav_path, emb_audio, sample_rate)
+    sf.write(target_wav_path, clean_audio, sample_rate)
+    sf.write(mixed_wav_path, mixed_audio, sample_rate)
+    sf.write(s2_target_wav_path, interference, sample_rate)
 
     # extract and save spectrograms
-    clean_spec, _ = ap.get_spec_from_audio_path(target_wav_path) # we need to load the wav to maintain compatibility with all audio backend
+    clean_spec, _ = ap.get_spec_from_audio_path(target_wav_path)
     mixed_spec, _ = ap.get_spec_from_audio_path(mixed_wav_path)
     clean_spec_path = glob_re_to_filename(data_out_dir, form['target'], num)
     mixed_spec_path = glob_re_to_filename(data_out_dir, form['mixed'], num)
     torch.save(torch.from_numpy(clean_spec), clean_spec_path)
     torch.save(torch.from_numpy(mixed_spec), mixed_spec_path)
+    return mixed_wav_path, target_wav_path, s2_target_wav_path, s1_dvec_wav_path
+
 
 def glob_re_to_filename(dire, glob, num, sub=False):
     if sub:
         return os.path.join(dire, glob.replace('*', '%06d_%d' %(num,sub)))
     return os.path.join(dire, glob.replace('*', '%06d' % num))
+
 
 # losses 
 class PowerLaw_Compressed_Loss(nn.Module):
@@ -371,6 +368,7 @@ class PowerLaw_Compressed_Loss(nn.Module):
 
         loss = spec_loss + (complex_loss * self.complex_loss_ratio)
         return loss
+
 
 # adapted from https://github.com/digantamisra98/Mish/blob/master/Mish/Torch/mish.py
 class Mish(nn.Module):
@@ -413,6 +411,7 @@ def get_mask(source, source_lengths):
     for i in range(B):
         mask[i, :, source_lengths[i]:] = 0
     return mask
+
 
 class SiSNR_With_Pit(nn.Module):
     def __init__(self):
@@ -473,6 +472,7 @@ class SiSNR_With_Pit(nn.Module):
         loss = 20 - torch.mean(max_snr) # i use 20 because 20 is very high value
         return loss
 
+
 def validation(criterion, ap, model, testloader, tensorboard, step, cuda=True, loss_name='si_snr', test=False):
     sdrs = []
     losses = []
@@ -528,6 +528,7 @@ def validation(criterion, ap, model, testloader, tensorboard, step, cuda=True, l
             print("Mean Test SDR:", mean_sdr)
             return mean_test_loss, mean_sdr
 
+
 def test_fast_with_si_srn(criterion, ap, model, testloader, tensorboard, step, cuda=True, loss_name='si_snr', test=False):
     losses = []
     model.eval()
@@ -557,10 +558,12 @@ def test_fast_with_si_srn(criterion, ap, model, testloader, tensorboard, step, c
         print("Mean Si-SRN with Pit Loss:", mean_test_loss)
         return mean_test_loss
 
+
 class AttrDict(dict):
     def __init__(self, *args, **kwargs):
         super(AttrDict, self).__init__(*args, **kwargs)
         self.__dict__ = self
+
 
 def load_config(config_path):
     config = AttrDict()
@@ -572,6 +575,7 @@ def load_config(config_path):
     config.update(data)
     return config
 
+
 def load_config_from_str(input_str):
     config = AttrDict()
     input_str = re.sub(r'\\\n', '', input_str)
@@ -579,6 +583,7 @@ def load_config_from_str(input_str):
     data = yaml.load(input_str, Loader=yaml.FullLoader)
     config.update(data)
     return config
+
 
 def copy_config_file(config_file, out_path, new_fields):
     config_lines = open(config_file, "r").readlines()
@@ -637,12 +642,14 @@ def window_sumsquare(window, n_frames, hop_length=200, win_length=800,
         x[sample:min(n, sample + n_fft)] += win_sq[:max(0, min(n_fft, n - sample))]
     return x
 
+
 def load_wav_to_torch(full_path):
     """
     Loads wavdata into torch array
     """
     sampling_rate, data = read(full_path)
     return torch.from_numpy(data).float(), sampling_rate
+
 
 def set_init_dict(model_dict, checkpoint, c):
     """

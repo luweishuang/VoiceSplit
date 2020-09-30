@@ -353,7 +353,7 @@ def SDR_google():
 
 # Load GE2E model
 print("Preparing the encoder, the synthesizer and the vocoder...")
-encoder.load_model(Path('encoder/saved_models/zh/aishell2.pt'))
+encoder.load_model(Path('encoder/saved_models/zh/aishell2_2.pt'))
 print("Testing your configuration with small inputs.")
 
 checkpoint_path = 'models/demo5.pt'
@@ -381,8 +381,100 @@ print("load model form Step:", step)
 if cuda:
     model = model.cuda()
 
-voiceFilter_2_speaker()
+# voiceFilter_2_speaker()
+# voiceFilter_single_speaker()
+# SDR_google()
 
-voiceFilter_single_speaker()
 
-SDR_google()
+# create output path
+os.makedirs('datasets/LibriSpeech/audios_demo/2_speakers/predict/', exist_ok=True)
+os.makedirs('datasets/LibriSpeech/audios_demo/2_speakers/images/', exist_ok=True)
+
+test_csv = pd.read_csv('datasets/LibriSpeech/test_demo.csv', sep=',').values
+
+sdrs_before = []
+sdrs_after = []
+snrs_before = []
+snrs_after = []
+for noise_utterance, emb_utterance, clean_utterance, clean_utterance2 in test_csv:
+    noise_utterance = noise_utterance.replace(' ', '')
+    emb_utterance = emb_utterance.replace(' ', '')
+    clean_utterance = clean_utterance.replace(' ', '')
+    clean_utterance2 = clean_utterance2.replace(' ', '')
+    output_path = noise_utterance.replace('noisy', 'predict').replace(' ', '')
+    est_wav, target_wav, target_wav2, mixed_wav, emb_wav = predict(encoder, ap, noise_utterance, clean_utterance, clean_utterance2, emb_utterance, outpath=output_path, save_img=True)
+
+    len_est = len(est_wav)
+    len_mixed = len(mixed_wav)
+    if len_est > len_mixed:
+        # mixed need is biggest
+        est_wav = est_wav[:len_mixed]
+    else:
+        # if mixed is biggest than estimation wav we need pad with zeros because is expected that this part is silence
+        est_wav = np.pad(est_wav, (0, len(mixed_wav) - len(est_wav)), 'constant', constant_values=(0, 0))
+
+    # get wav for second voice, its need for SDR calculation
+    est_wav2 = mixed_wav - est_wav
+
+    len_est = len(est_wav2)
+    len_mixed = len(mixed_wav)
+    if len_est > len_mixed:
+        # mixed need is biggest
+        est_wav2 = est_wav2[:len_mixed]
+    else:
+        # if mixed is biggest than estimation wav we need pad with zeros because is expected that this part is silence
+        est_wav2 = np.pad(est_wav2, (0, len(mixed_wav) - len(est_wav2)), 'constant', constant_values=(0, 0))
+
+    len_est = len(target_wav)
+    len_mixed = len(mixed_wav)
+    if len_est > len_mixed:
+        # mixed need is biggest
+        target_wav = target_wav[:len_mixed]
+    else:
+        # if mixed is biggest than estimation wav we need pad with zeros because is expected that this part is silence
+        target_wav = np.pad(target_wav, (0, len(mixed_wav) - len(target_wav)), 'constant', constant_values=(0, 0))
+
+    # get target_wav for second voice, its recomended because google dont provide clean_utterance2 in your demo i need get in LibreSpeech Dataset, but i dont know if they normalised this file..
+    target_wav2 = mixed_wav - target_wav
+
+    # calculate snr and sdr before model
+    ests = [torch.from_numpy(mixed_wav), torch.from_numpy(mixed_wav)]  # the same voices is mixed_wav
+    egs = [torch.from_numpy(target_wav), torch.from_numpy(target_wav2)]
+    mix = torch.from_numpy(mixed_wav)
+    _snr, per = permute_SI_SNR(ests, egs, mix)
+    _sdr = permutation_sdr(ests, egs, mix, per)
+    snrs_before.append(_snr)
+    sdrs_before.append(_sdr)
+
+    # calculate snr and sdr after model
+    ests = [torch.from_numpy(est_wav), torch.from_numpy(est_wav2)]
+    egs = [torch.from_numpy(target_wav), torch.from_numpy(target_wav2)]
+    mix = torch.from_numpy(mixed_wav)
+    _snr, per = permute_SI_SNR(ests, egs, mix)
+    _sdr = permutation_sdr(ests, egs, mix, per)
+    snrs_after.append(_snr)
+    sdrs_after.append(_sdr)
+
+    # show in notebook results
+    print('-' * 100)
+    print('-' * 30, os.path.basename(noise_utterance), '-' * 30)
+    print("Input/Noise Audio")
+    display(Audio(mixed_wav, rate=16000))
+    print('Predicted Audio')
+    display(Audio(est_wav, rate=16000))
+    print('Target Audio')
+    display(Audio(target_wav, rate=16000))
+    print('Predicted2 Audio')
+    display(Audio(est_wav2, rate=16000))
+    print('Target2 Audio')
+    display(Audio(target_wav2, rate=16000))
+    print('-' * 100)
+    del target_wav, est_wav, mixed_wav
+
+print('=' * 20, "Before Model", '=' * 20)
+print('\nAverage SNRi: {:.5f}'.format(np.array(snrs_before).mean()))
+print('Average SDRi: {:.5f}'.format(np.array(sdrs_before).mean()))
+
+print('=' * 20, "After Model", '=' * 20)
+print('\nAverage SNRi: {:.5f}'.format(np.array(snrs_after).mean()))
+print('Average SDRi: {:.5f}'.format(np.array(sdrs_after).mean()))

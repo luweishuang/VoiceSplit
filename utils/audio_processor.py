@@ -437,6 +437,7 @@ class WaveGlowAudioProcessor(object):
                 sampling_rate, self.sampling_rate))
         return audio / MAX_WAV_VALUE
 
+
 class openVoiceFilterAudioProcessor():
     #  This class is adapted from VoiceFilter open source implementation (https://github.com/mindslab-ai/voicefilter/blob/master/utils/audio.py)
     # So Credits for: @seungwonpark
