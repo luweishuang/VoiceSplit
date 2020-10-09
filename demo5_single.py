@@ -130,7 +130,7 @@ print("load model form Step:", step)
 if cuda:
     model = model.cuda()
 
-dataset_name = 'datasets/LibriSpeech/dev-clean'
+# dataset_name = 'datasets/LibriSpeech/dev-clean'
 dataset_name = 'datasets/aishell2'
 all_folders = [x for x in glob.glob(os.path.join(Path(dataset_name), 'audios/*'))]
 all_spk = [glob.glob(os.path.join(Path(spk), "**-norm.wav"), recursive=True) for spk in all_folders]
@@ -179,17 +179,4 @@ print('=' * 20, "after Model", '=' * 20)
 print('SNRi: {:.5f}'.format(_snr))
 print('SDRi: {:.5f}'.format(_sdr))
 
-# show in notebook results
-print('-' * 100)
-print("Input/Noise Audio")
-display(Audio(mixed_wav, rate=16000))
-print('Predicted Audio')
-display(Audio(est_wav, rate=16000))
-print('Target Audio')
-display(Audio(target_wav, rate=16000))
-print('Predicted2 Audio')
-display(Audio(est_wav2, rate=16000))
-print('Target2 Audio')
-display(Audio(target_wav2, rate=16000))
-print('-' * 100)
 del target_wav, est_wav, mixed_wav
