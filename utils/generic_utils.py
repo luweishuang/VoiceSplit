@@ -24,6 +24,7 @@ from random import getrandbits
 # set random seed
 random.seed(0)
 
+
 def get_audios_with_random_amp(emb_audio, clean_audio, interference, noise_audio):
     # noise audio amp is small than mean between clean 1 and interference 2.
     # random amplitude sinal
