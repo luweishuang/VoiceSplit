@@ -111,6 +111,8 @@ all_spk = [x for x in all_spk if len(x) >= 2]
 for spk1 in all_spk:
     # spk1 = random.sample(all_spk, 1)
     s1_dvec, s1_target = random.sample(spk1, 2)
+    # s1_dvec = s1_dvec.replace("-norm.wav", ".wav")
+    # s1_target = s1_target.replace("-norm.wav", ".wav")
     print('s1_dvec: %s, s1_target: %s' % (s1_dvec, s1_target))
 
     output_dir = os.path.join(Path(dataset_name), 'output')
