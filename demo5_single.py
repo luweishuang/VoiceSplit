@@ -14,9 +14,8 @@ from utils.audio_processor import WrapperAudioProcessor as AudioProcessor
 from models.voicefilter.model import VoiceFilter
 from models.voicesplit.model import VoiceSplit
 from utils.generic_utils import load_config_from_str, load_config, mix_wavfiles
-from utils.demo_utils import save_spec, adjust_2_wavs
+from utils.demo_utils import save_spec, adjust_2_wavs, rm_wavs, rm_flacs
 from utils.demo_utils_SNR import permute_SI_SNR, permutation_sdr
-from IPython.display import Audio, display
 
 
 def get_embedding(encoder_model, ap, wave_file_path):
@@ -103,7 +102,7 @@ def predict(encoder_model, ap, mixed_path, target_path, target_path2, emb_ref_pa
 
 print("... Load GE2E encoder model ...")
 # encoder.load_model(Path('encoder/saved_models/zh/aishell2_2.pt'))
-encoder.load_model(Path('encoder/saved_models/pretrained_en.pt'))
+encoder.load_model(Path('encoder/saved_models/pretrained_en.pt'))    # shell2数据集上，英文encoder的snr指标好于中文encoder模型
 
 checkpoint_path = 'models/demo5.pt'
 checkpoint = torch.load(checkpoint_path, map_location='cpu')
@@ -130,26 +129,33 @@ print("load model form Step:", step)
 if cuda:
     model = model.cuda()
 
-# dataset_name = 'datasets/LibriSpeech/dev-clean'
-dataset_name = 'datasets/aishell2'
-all_folders = [x for x in glob.glob(os.path.join(Path(dataset_name), 'audios/*'))]
+sample_rate = model_c.audio[model_c.audio['backend']]['sample_rate']
+audio_len = model_c.audio['audio_len']
+form = model_c.dataset['format']
+
+# dataset_name = 'datasets/aishell2'
+# rm_wavs(Path(dataset_name), audio_len)  # do once
+# exit()
+# all_folders = [x for x in glob.glob(os.path.join(Path(dataset_name), 'audios/*'))]
+
+dataset_name = 'datasets/libriSpeech/test-clean'     # libriSpeech 音频平均时长明显大于aishell2
+# rm_flacs(Path(dataset_name), audio_len)  # do once
+# exit()
+all_folders = [x for x in glob.glob(os.path.join(Path(dataset_name), 'audios/*/*'))]
+
 all_spk = [glob.glob(os.path.join(Path(spk), "**-norm.wav"), recursive=True) for spk in all_folders]
 all_spk = [x for x in all_spk if len(x) >= 2]
 spk1, spk2 = random.sample(all_spk, 2)
 s1_dvec, s1_target = random.sample(spk1, 2)
 s2 = random.choice(spk2)
+print('s1_dvec: %s, s1_target: %s, s2: %s' % (s1_dvec, s1_target, s2))
 
 output_dir = os.path.join(Path(dataset_name), 'output')
 os.makedirs(output_dir, exist_ok=True)
-sample_rate = model_c.audio[model_c.audio['backend']]['sample_rate']
-audio_len = model_c.audio['audio_len']
-form = model_c.dataset['format']
 mix_wav_path, s1_target_wav_path, s2_target_wav_path, s1_dvec_wav_path = mix_wavfiles(output_dir, sample_rate, audio_len, ap, form, 1, s1_dvec, s2, s1_target)
 
 output_path = mix_wav_path.replace('mix', 'predict')
-est_wav, target_wav, target_wav2, mixed_wav, emb_wav = predict(encoder, ap, mix_wav_path,
-                                                               s1_target_wav_path, s2_target_wav_path, s1_dvec_wav_path, outpath=output_path, save_img=False)
-
+est_wav, target_wav, target_wav2, mixed_wav, emb_wav = predict(encoder, ap, mix_wav_path, s1_target_wav_path, s2_target_wav_path, s1_dvec_wav_path, outpath=output_path, save_img=False)
 est_wav, mixed_wav = adjust_2_wavs(est_wav, mixed_wav)
 
 # get wav for second voice, its need for SDR calculation

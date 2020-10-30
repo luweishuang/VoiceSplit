@@ -3,7 +3,47 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pylab as plt
 import numpy as np
+import os, glob
+import sox
+from pathlib import Path
 import imageio
+
+
+def rm_wavs111(wav_dir, audio_len_thread):
+    all_folders = [x for x in glob.glob(os.path.join(wav_dir, 'audios/*'))]
+    all_spk = [glob.glob(os.path.join(Path(spk), "**.wav"), recursive=True) for spk in all_folders]
+    for cur_spk in all_spk:
+        for cur_wav_path in cur_spk:
+            cur_audio_len = sox.file_info.duration(cur_wav_path)
+            if cur_audio_len < audio_len_thread+2:
+                os.system("rm %s" % cur_wav_path)
+    return
+
+
+def rm_flacs(wav_dir, audio_len_thread):
+    all_folders = [x for x in glob.glob(os.path.join(wav_dir, 'audios/*/*'))]
+    all_spk = [glob.glob(os.path.join(Path(spk), "**-norm.wav"), recursive=True) for spk in all_folders]
+    for cur_spk in all_spk:
+        for cur_norm_wav_path in cur_spk:
+            cur_wav_path = cur_norm_wav_path.replace("-norm.wav", ".flac")
+            cur_audio_len = sox.file_info.duration(cur_norm_wav_path)
+            if cur_audio_len < audio_len_thread+2:
+                os.system("rm %s" % cur_wav_path)
+                os.system("rm %s" % cur_norm_wav_path)
+    return
+
+
+def rm_wavs(wav_dir, audio_len_thread, ext=".wav"):
+    all_folders = [x for x in glob.glob(os.path.join(wav_dir, 'audios'))]
+    all_spk = [glob.glob(os.path.join(Path(spk), "**-norm.wav"), recursive=True) for spk in all_folders]
+    for cur_spk in all_spk:
+        for cur_norm_wav_path in cur_spk:
+            cur_wav_path = cur_norm_wav_path.replace("-norm.wav", ".wav")
+            cur_audio_len = sox.file_info.duration(cur_wav_path)
+            if cur_audio_len < audio_len_thread+2:
+                os.system("rm %s" % cur_wav_path)
+                os.system("rm %s" % cur_norm_wav_path)
+    return
 
 
 def adjust_2_wavs(est_wav, mixed_wav):

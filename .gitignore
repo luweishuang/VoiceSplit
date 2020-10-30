@@ -2,6 +2,8 @@ datasets/LibriSpeech/dev-clean/
 datasets/LibriSpeech/zips/
 datasets/aishell2/
 datasets/LibriSpeech/audios_demo/2_speakers/images/
+datasets/libriSpeech/
+datasets/voicefilter_results.zip
 encoder/saved_models
 models/demo5.pt
 models/pretrained.zip
